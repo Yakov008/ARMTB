@@ -1,0 +1,14 @@
+# Сборка PyInstaller
+server/build/
+server/dist/
+*.spec
+__pycache__/
+*.pyc
+
+# Рабочие данные сервера (пароли, токены, журнал) — не публикуем
+server/users.json
+server/devices.json
+server/events.db
+bin/users.json
+bin/devices.json
+bin/events.db

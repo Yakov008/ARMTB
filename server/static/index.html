@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Шкафы ТБ — управление</title>
+<style>
+  :root {
+    --bg: #f3f5f8; --card: #fff; --text: #1d2430; --muted: #6b7584; --line: #dde2e9;
+    --red: #c62828; --green: #2e7d32; --amber: #b26a00; --blue: #1f5fbf;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.4 system-ui, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+  header { background: #c62828; color: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 16px; }
+  header h1 { font-size: 18px; margin: 0; flex: 1; }
+  header button { background: transparent; color: #fff; border: 1px solid #fff8; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px; }
+  h2 { font-size: 16px; margin: 24px 0 10px; }
+  button { font: inherit; padding: 8px 16px; border-radius: 6px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
+  button.primary { background: var(--green); border-color: var(--green); color: #fff; font-weight: 600; }
+  button.danger { background: var(--red); border-color: var(--red); color: #fff; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  input { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; width: 100%; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .card h3 { margin: 0 0 4px; font-size: 16px; }
+  .id { color: var(--muted); font-size: 12px; }
+  .row { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
+  .pill { padding: 3px 10px; border-radius: 99px; font-size: 13px; font-weight: 600; }
+  .ok { background: #e6f4ea; color: var(--green); }
+  .warn { background: #fff4e0; color: var(--amber); }
+  .bad { background: #fdecea; color: var(--red); }
+  .off { background: #eceff3; color: var(--muted); }
+  .actions { display: flex; gap: 8px; }
+  .actions button { flex: 1; }
+  .meta { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); font-size: 13px; vertical-align: top; }
+  th { background: #f7f8fa; color: var(--muted); font-weight: 600; }
+  tr.alarm td { background: #fdecea; }
+  .login { max-width: 340px; margin: 80px auto; }
+  .err { color: var(--red); font-size: 13px; min-height: 18px; margin-top: 8px; }
+  dialog { border: none; border-radius: 12px; padding: 20px; width: min(420px, 92vw); }
+  dialog::backdrop { background: #0007; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #222; color: #fff; padding: 10px 18px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .conn { font-size: 12px; opacity: .85; }
+  .tablewrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+
+<div id="loginView" hidden>
+  <form class="card login" id="loginForm">
+    <h3>Вход для поездного диспетчера</h3>
+    <label>Логин</label><input id="lLogin" autocomplete="username" required>
+    <label>Пароль</label><input id="lPass" type="password" autocomplete="current-password" required>
+    <div class="err" id="lErr"></div>
+    <button class="primary" style="width:100%;margin-top:8px">Войти</button>
+  </form>
+</div>
+
+<div id="appView" hidden>
+  <header>
+    <h1>Удалённое управление шкафами тормозных башмаков</h1>
+    <span class="conn" id="conn"></span>
+    <span id="userName"></span>
+    <button id="logoutBtn">Выйти</button>
+  </header>
+  <main>
+    <h2>Шкафы на станциях</h2>
+    <div class="grid" id="devices"></div>
+
+    <h2>Журнал событий</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Время</th><th>Шкаф</th><th>Событие</th><th>Подробности</th><th>Диспетчер</th></tr></thead>
+        <tbody id="events"></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<dialog id="openDialog">
+  <form method="dialog" id="openForm">
+    <h3 style="margin-top:0">Открыть шкаф</h3>
+    <div id="openName" style="font-weight:600"></div>
+    <label>Номер поезда</label><input id="oTrain" required placeholder="например, 2412">
+    <label>Комментарий (машинист, причина)</label><input id="oComment" placeholder="закрепление, окончание рабочего времени">
+    <p class="id">Замок откроется на 60 с. После того как бригада закроет дверь, шкаф запрётся автоматически.</p>
+    <div class="actions">
+      <button type="button" id="oCancel">Отмена</button>
+      <button class="primary" id="oSubmit">Открыть</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let devices = [];
+let openTarget = null;
+
+const EVENT_NAMES = {
+  open_requested: "Команда «открыть»",
+  close_requested: "Команда «закрыть»",
+  unlocked: "Замок открыт",
+  locked: "Замок закрыт",
+  door_opened: "Дверь открыта",
+  door_closed: "Дверь закрыта",
+  door_opened_while_locked: "⚠ Дверь открыта без команды",
+  online: "Связь установлена",
+  offline: "Нет связи",
+  login: "Вход в систему",
+  login_failed: "⚠ Неудачный вход",
+  auth_failed: "⚠ Чужое устройство",
+};
+const LOCK_REASONS = { remote: "по команде", door_closed: "дверь закрыта", timeout: "дверь не открывали", max_time: "превышено время" };
+const ALARMS = new Set(["door_opened_while_locked", "login_failed", "auth_failed", "offline"]);
+
+function toast(text) {
+  const t = $("toast");
+  t.textContent = text;
+  t.classList.add("show");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.classList.remove("show"), 3500);
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    ...opts,
+  });
+  if (res.status === 401 && path !== "/api/login") { showLogin(); throw new Error("Требуется вход"); }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || res.statusText);
+  return data;
+}
+
+function fmtTime(ts) {
+  return new Date(ts * 1000).toLocaleString("ru-RU");
+}
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function deviceName(id) {
+  const d = devices.find((x) => x.id === id);
+  return d ? d.name : id || "—";
+}
+
+function renderDevices() {
+  $("devices").innerHTML = devices.map((d) => {
+    const link = d.online ? '<span class="pill ok">На связи</span>' : '<span class="pill off">Нет связи</span>';
+    const lock = !d.online ? "" : d.lock === "locked"
+      ? '<span class="pill ok">🔒 Закрыт</span>'
+      : d.lock === "unlocked" ? '<span class="pill warn">🔓 Открыт</span>' : '<span class="pill off">Замок: ?</span>';
+    const door = !d.online ? "" : d.door === "closed"
+      ? '<span class="pill ok">Дверь закрыта</span>'
+      : d.door === "open" ? `<span class="pill ${d.lock === "locked" ? "bad" : "warn"}">Дверь открыта</span>` : "";
+    const seen = d.last_seen ? `Последние данные: ${fmtTime(d.last_seen)}` : "Данных ещё не было";
+    const extra = d.online && d.rssi != null ? ` · Wi-Fi ${d.rssi} dBm · прошивка ${esc(d.fw)}` : "";
+    return `<div class="card">
+      <h3>${esc(d.name)}</h3><div class="id">${esc(d.id)}</div>
+      <div class="row">${link}${lock}${door}</div>
+      <div class="actions">
+        <button class="primary" data-open="${esc(d.id)}" ${d.online && d.lock !== "unlocked" ? "" : "disabled"}>Открыть</button>
+        <button class="danger" data-close="${esc(d.id)}" ${d.online && d.lock === "unlocked" ? "" : "disabled"}>Закрыть</button>
+      </div>
+      <div class="meta">${seen}${extra}</div>
+    </div>`;
+  }).join("");
+}
+
+function eventRow(e) {
+  let detail = e.detail || "";
+  if (e.kind === "locked") detail = LOCK_REASONS[detail] || detail;
+  if (e.kind === "unlocked") detail = detail === "remote" ? "по команде диспетчера" : detail;
+  return `<tr class="${ALARMS.has(e.kind) ? "alarm" : ""}">
+    <td>${fmtTime(e.ts)}</td><td>${esc(deviceName(e.device_id))}</td>
+    <td>${esc(EVENT_NAMES[e.kind] || e.kind)}</td><td>${esc(detail)}</td><td>${esc(e.user)}</td></tr>`;
+}
+
+async function loadEvents() {
+  const list = await api("/api/events?limit=200");
+  $("events").innerHTML = list.map(eventRow).join("");
+}
+
+// --- Живые обновления ---
+let socket = null;
+function connectLive() {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  socket = new WebSocket(`${proto}://${location.host}/ws/ui`);
+  socket.onopen = () => { $("conn").textContent = "● онлайн"; loadEvents(); };
+  socket.onmessage = (m) => {
+    const msg = JSON.parse(m.data);
+    if (msg.type === "devices") { devices = msg.devices; renderDevices(); }
+    if (msg.type === "event") {
+      $("events").insertAdjacentHTML("afterbegin", eventRow(msg.event));
+      if (msg.event.kind === "door_opened_while_locked") toast(`ВНИМАНИЕ: ${deviceName(msg.event.device_id)} — дверь открыта без команды`);
+    }
+  };
+  socket.onclose = (ev) => {
+    $("conn").textContent = "○ нет связи с сервером";
+    if (ev.code === 4401) { showLogin(); return; }
+    setTimeout(connectLive, 3000);
+  };
+}
+
+// --- Кнопки ---
+$("devices").addEventListener("click", async (ev) => {
+  const openId = ev.target.dataset.open;
+  const closeId = ev.target.dataset.close;
+  if (openId) {
+    openTarget = openId;
+    $("openName").textContent = deviceName(openId);
+    $("oTrain").value = ""; $("oComment").value = "";
+    $("openDialog").showModal();
+  }
+  if (closeId) {
+    if (!confirm(`Закрыть шкаф «${deviceName(closeId)}»?`)) return;
+    try {
+      await api(`/api/devices/${encodeURIComponent(closeId)}/close`, { method: "POST" });
+      toast("Шкаф закрыт");
+    } catch (e) { toast("Ошибка: " + e.message); }
+  }
+});
+
+$("oCancel").onclick = () => $("openDialog").close();
+$("openForm").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  $("oSubmit").disabled = true;
+  try {
+    await api(`/api/devices/${encodeURIComponent(openTarget)}/open`, {
+      method: "POST",
+      body: JSON.stringify({ train: $("oTrain").value.trim(), comment: $("oComment").value.trim() }),
+    });
+    $("openDialog").close();
+    toast("Шкаф открыт");
+  } catch (e) { toast("Ошибка: " + e.message); }
+  finally { $("oSubmit").disabled = false; }
+});
+
+// --- Вход / выход ---
+function showLogin() {
+  if (socket) { socket.onclose = null; socket.close(); socket = null; }
+  $("appView").hidden = true; $("loginView").hidden = false;
+}
+function showApp(user) {
+  $("userName").textContent = user.name;
+  $("loginView").hidden = true; $("appView").hidden = false;
+  connectLive();
+}
+
+$("loginForm").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  $("lErr").textContent = "";
+  try {
+    const user = await api("/api/login", {
+      method: "POST",
+      body: JSON.stringify({ login: $("lLogin").value.trim(), password: $("lPass").value }),
+    });
+    $("lPass").value = "";
+    showApp(user);
+  } catch (e) { $("lErr").textContent = e.message; }
+});
+
+$("logoutBtn").onclick = async () => { await api("/api/logout", { method: "POST" }); showLogin(); };
+
+api("/api/me").then(showApp).catch(() => showLogin());
+</script>
+</body>
+</html>
